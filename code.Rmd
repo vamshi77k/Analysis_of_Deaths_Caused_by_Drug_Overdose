@@ -1,0 +1,891 @@
+---
+title: "Analysis on Deaths Caused by Drug Overdose"
+author: Jayanth Dasamantharao
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    theme: cosmo
+    toc: yes
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE)
+```
+
+**INTRODUCTION**
+
+The problem of drug overdose has become a serious issue in the United States, with a history of over 50 years. To combat this issue, the federal budget allocated 42.5 billion USD in 2023, which is $3.2 billion more than the previous year[1]. In 2022, drug overdoses caused over 79,000 deaths, exceeding the number of deaths caused by motor vehicle accidents, homicides, and suicides. Although the estimated overdose deaths in the first nine months of 2022 declined from the same period in 2021, they were still 50% higher than pre-pandemic levels[2]. Misuse of prescription medication is a major contributing factor to this increase, making it a significant public health concern in Connecticut[3]. As part of our research project, we aim to investigate the issue of drug abuse prevailing in Connecticut.
+
+**OBJECTIVE & APPROACH**
+
+We aim to uncover the underlying causes and trends behind the high prevalence of drug abuse in Connecticut by analyzing publicly available data on this issue. To achieve this, we have devised a three-pronged strategy, which is outlined below.
+
+Our goal is to gain insight into the patterns and causes of drug abuse in Connecticut by analyzing publicly available data. To achieve this, we have devised a three-pronged approach. 
+
+Firstly, we will examine the **demographic attributes** of drug abuse, such as age, gender, race, and area, as we hypothesize that these factors are highly correlated with drug consumption. 
+
+Secondly, we will explore the **temporal patterns** of drug abuse, including year-by-year trends, seasonal variations, and preferred times of drug use.
+
+Finally, we will diagnose the **underlying causes** of drug abuse, such as the chemicals consumed and the type of injuries suffered. 
+Our aim is to identify the most common chemicals found in drug abuse cases, the types of drugs most frequently abused, and the categories responsible for 80% of cases.
+
+
+**Data Exploration**
+
+Data Source:
+
+The data pertaining to accidental drug-related deaths from 2012 to 2021 has been obtained from the official data repository of the United States Government. The Office of the Chief Medical Examiner conducted an investigation, which included a toxicity report, death certificate, and scene investigation, to derive this data. The source of this data is https://catalog.data.gov/dataset/accidental-drug-related-deaths-2012-2018.
+
+Data Variables and Description:
+
+The dataset we acquired contains various parameters that we have associated with the three-fold approach we outlined earlier, in order to determine which fields can be used for each analysis. To make the variable names distinguishable, we have enclosed them in quotes.
+
+The dataset has three categories of fields: temporal, demographic, and causal. The temporal fields include "Date," which indicates the date when the accidental death occurred or was reported. The demographic fields include "Sex," "Age," and "Race," as well as fields indicating the city, state, and county of residence or death of the drug addict person. We also have fields providing the latitude and longitude of the death location and a field indicating the place of death.
+
+The causal fields include "COD," which denotes the cause of death and lists all the chemicals consumed by the victim, separated by commas. We also have separate fields for each of the 14 chemicals causing death, indicating whether they were present or not. The field "Description.Of.Injury" denotes how the drug abuse took place, while "MannerofDeath" indicates the manner in which death occurred.
+
+Overall, the dataset covers a period of ten years from 2012 to 2022 and contains 48 variables. With 9202 observations, we have sufficient data to conduct our investigation.
+
+
+```{r}
+# Loading all required packages
+library(wordcloud)
+library(memisc)
+library(tidyverse)
+library(downloader)
+library(naniar)
+library(openintro)
+library(ggplot2)
+library(dplyr)
+library(choroplethr)
+library(maps)
+library(scales)
+library(tidyr)
+library(forcats)
+library(ggthemes)
+library(states)
+library(shiny)
+```
+
+\newpage
+
+```{r}
+# Reading the dataset
+main_df <- read.csv("drugdeaths.csv",na.strings=c("","NA"))
+cat(paste("\n Number of rows: ", nrow(main_df), "\n", 
+          "Number of columns: ", ncol(main_df), "\n \n" ), sep="")
+```
+
+**Data Challenges and Resolutions**
+
+To understand the root cause and type of injury related to drug abuse, we analyzed the "Description.Of.Injury" column
+which contained free-form text. To categorize this data, we tokenized the text and calculated the frequency of each token
+across all drug abuse cases. This helped us determine the most common underlying causes and types of injuries.
+
+The "Date.Type" column in the dataset provided information on when the drug abuse case occurred. However, the column
+had two values, "dateReported" and "dateOfDeath", which sometimes resulted in gaps between the two dates. To overcome
+this issue, we aggregated the data for different time ranges, providing an approximate value for the time of the event.
+
+Data Cleaning:
+
+During our analysis, we encountered missing values in the dataset which were addressed using pairwise treatment. Additionally, we utilized natural language processing techniques to clean the free-text data. We also identified anomalies in the data during our cleaning process, such as the presence of "USA" in the "Death.County" column, which we resolved. Furthermore, there was a numerical entry in the "Death.City" column for one of the drug abuse cases.
+
+**Missing Data Exploration**
+
+We started our analysis by examining the missing values present in the dataset. This was a crucial step as it helped us
+to evaluate the quality of the data and determine the suitability of the columns for our analysis. Based on our observations,
+we found the following:
+
+1. Demographic information such as "Age", "Sex", "Location", "Injury.Place", "Manner.of.Death" had less than 1% missing values,
+which made them suitable for our analysis.
+
+2. The temporal information provided by "Date" and "Date.Type" was available for almost all cases, making them useful for
+trend analysis.
+
+3. Spatial data parameters like "Injury.State", "Injury.County", "Residence.State", "Residence.County" had more than 15% missing
+values, with some columns reaching as high as 72%. To mitigate this, we opted to use other parameters like 'DeathCityGeo',
+'InjuryCityGeo', and 'ResidenceCityGeo' that had less than 2% missing values.
+
+4. The "Description.of.Injury" column had about 15% missing values, but it was still valuable as it contained important
+information about the scenarios leading to drug overdose deaths. We utilized a word cloud analysis to examine this column
+and found the data to be sufficient.
+
+5. The blank values in the drug-related columns indicated that the drug was not consumed by the candidate. Thus, the
+missing values in these columns did not pose any significant problem.
+
+Overall, the data appeared to be suitable for our analysis, and we could proceed with our investigation.
+
+```{r}
+#Replacing blank values with NA
+acc_drug <- main_df
+#1st 20 parameters
+vis_miss(acc_drug [,c(1:24)], sort_miss = TRUE) +
+  theme(axis.text.x = element_text(angle = 90))
+
+#2nd 21 parameters
+vis_miss(acc_drug [,c(25:48)], sort_miss = TRUE) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+**Demographical Aspects of Drug Abuse**
+
+Assesing the distribution of the fields
+
+After identifying the parameters that had sufficient data, we examined the distribution of each of these variables. We created visualizations to observe the spread of numerical data, the frequency of categories within each column, and the proportion of deaths along various dimensions. This helped us identify which parameters needed to be further explored to gain a deeper understanding of the drug abuse situation.
+
+
+
+1) This section of analysis focuses on the comparison between the **Location of Injury and the Location of Death** in the dataset.
+
+We analyzed the data related to the Location of Injury and Death to explore whether there was a correlation between the two. Specifically, we wanted to investigate if the location of injury was the same as the location of death, which could indicate that the death was instantaneous and occurred before the person could move to a different location. Upon analyzing the data, we found that a large number of deaths occurred in residences and hospitals. We also noticed that the majority of injuries occurred in residences, suggesting that most drug-related injuries and deaths happened at home. This prompted us to further investigate the cities and states where drug-related deaths were reported in residences.
+
+
+
+```{r}
+# By visualizing the location of death
+x <- main_df %>%
+    dplyr::select(Location) %>%
+    na.omit() 
+
+death_loc <- x %>%
+                group_by(Location=x$Location) %>% 
+                summarise(Freq=n()) %>% 
+                mutate(perc_Death=Freq/nrow(x)) %>%
+                arrange(desc(Freq)) %>%  # Sort by frequency
+                mutate(Location = fct_lump(Location, n = 3, other_level = "Other")) %>%  # Group by top 3 locations
+                mutate(Location = fct_infreq(Location))  # Order by frequency
+
+# Graph plot
+ggplot(death_loc,aes(Location,perc_Death)) +
+  geom_col(color  = "darkcyan", fill ="darkcyan")+
+  ggtitle("Deaths and the % of deaths categorized by location.")+
+  ylab('% of Deaths') +
+  xlab ('Location of Death') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# Rotate x-axis labels
+
+# Visualizing the location of injury
+x<- main_df %>%
+    dplyr::select(Injury.Place) %>%
+    na.omit() 
+loc_injury <- x %>%
+                group_by(Injury.Place=x$Injury.Place) %>% 
+                summarise(Freq=n()) %>% 
+                mutate(perc_Injury=Freq/nrow(x))
+loc_injury <- loc_injury[order(loc_injury$perc_Injury),]              
+  
+#Graph plot
+ggplot(loc_injury[c(1:30),],aes(x = perc_Injury, y = reorder(Injury.Place, perc_Injury))) +
+	geom_point(color = "red")+
+  ggtitle("Relation between Location of Injury and the % of Deaths")+
+   xlab('% of Deaths') +
+  ylab ('Location of Injury')
+
+ggplot(loc_injury[c(31:58),],aes(x = perc_Injury, y = reorder(Injury.Place, perc_Injury))) +
+	geom_point(color = "red")+
+  ggtitle("Relation between the Location of Injury and the % of Deaths(2)")+
+   xlab('% of Deaths') +
+  ylab ('Location of Injury')
+
+#Graph plot
+ggplot(loc_injury[c(59:91),],aes(x = perc_Injury, y = reorder(Injury.Place, perc_Injury))) +
+	geom_point(color = "red")+
+  ggtitle("Relation between the Location of Injury and the % of Deaths(3)")+
+   xlab('% of Deaths') +
+  ylab ('Location of Injury')
+```
+
+
+2) **Age**
+
+As the dataset contained only one continuous variable, namely age, we analyzed its distribution across various categorical variables. The distribution of age across the entire dataset exhibited a bimodal shape with peaks at approximately 28-30 years and 50 years. Additionally, the distribution appeared to be skewed towards the right.
+
+
+```{r}
+ggplot(acc_drug, aes(x=Age, fill = "Age Group")) + 
+  geom_histogram(binwidth = 2, boundary = 0, closed = "left", 
+                 fill = "lightblue", color = "black", size = 0.5) +
+  ylab('Count of individuals who passed away') +
+  ggtitle("Age group distribution displayed using a histogram.") +
+  scale_fill_manual(values = c("Age Group" = "steelblue2")) +
+  labs(fill = "Age Group")
+```
+
+3) **Sex**
+
+The count of male deaths due to drug overdose was over two times higher than that of females.
+
+```{r}
+ggplot(filter(acc_drug, Sex == "Female" | Sex=='Male'), aes(x=Age,color=Sex)) + 
+  geom_histogram(binwidth = 2, boundary = 0, closed = "left",fill='snow') +
+  ggtitle("Histogam of the Age Group by Gender") + 
+  ylab('No. of people who have died')+
+  facet_wrap(~Sex) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom",
+        legend.title = element_text(face = "bold", size = 10),
+        legend.text = element_text(size = 8),
+        plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+        panel.grid.major.y = element_line(color = "gray50"),
+        panel.background = element_rect(fill = "gray"),
+        #plot.caption = element_text(size = 8, color = "gray50"),
+        plot.background = element_rect(fill = "aliceblue"))
+```
+
+```{r}
+acc_drug %>%
+  filter(Sex == "Female" | Sex == "Male") %>%
+  group_by(Sex) %>%
+  summarise(mean_age = mean(Age, na.rm = TRUE),
+            median_age = median(Age, na.rm = TRUE))
+```
+  + Females who died due to drug abuse had a higher median age than males.
+  + The mean age for male who died due to drug abuse was lower than female with 42.94
+
+
+
+*Sex and Age*
+
+```{r}
+ggplot(data=filter(acc_drug, Sex == "Female" |  Sex=='Male'), aes(x=reorder(Sex,-Age,FUN=median), y=Age, fill=Sex)) +
+  geom_boxplot() + 
+  ggtitle("Graph displaying box plots of the age distribution of people categorized by gender.") + 
+  xlab("Race") + 
+  ylab("Age") +
+  scale_fill_manual(values=c("dodgerblue2", "pink")) + 
+  theme(plot.title = element_text(face = "bold")) +
+  coord_flip()
+```
+
+
+4) **Race and Age**
+
+The majority of drug-related deaths were among White individuals, followed by those of Hispanic, White, and Black ethnicity. Chinese individuals had the lowest median age of death due to drug abuse, while Black individuals had the highest median age
+
+```{r}
+library(ggthemes)
+
+ggplot(data=acc_drug,aes(x=reorder(Race,-Age,FUN=median), y=Age, fill=Race)) +
+  geom_boxplot(alpha=0.5, na.rm = TRUE) + 
+  theme(legend.position = "none") +
+  ggtitle("People from different Race") +
+  xlab("Race") + 
+  ylab("Age") +
+  theme(plot.title = element_text(face = "bold")) +
+  coord_flip()
+
+custom_colors <- c("Black" = "#1F1F1F", "White" = "beige", "Asian" = "#2F4F4F", "Hispanic" = "#FFDAB9", "Other" = "#8FBC8F")
+
+plot_race<-acc_drug %>%
+  filter(!is.na(Race))%>%
+  group_by(Race)%>%
+  summarize(Freq=n()) %>%
+  mutate(prop=Freq/sum(Freq)) %>%
+  ggplot()+
+  geom_bar(aes(x=reorder(Race,prop), y=prop, fill=Race),stat='identity')+
+  coord_flip()+
+  ggtitle('Maximum deaths due to drug abuse')+
+  xlab('Proportion of deaths') +
+  scale_fill_manual(values = custom_colors) +
+  theme(panel.background = element_rect(fill = "gray"),
+        panel.grid.major = element_line(color = "darkgray"),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+plot_race
+```
+
+**Spatial Analysis**
+
+Spatial analysis is a process of analyzing and understanding data related to places and geographic phenomena. It involves the use of specialized software and techniques to study and visualize patterns in spatial data, such as maps and GPS coordinates.
+
+Spatial analysis can help identify patterns, trends, and relationships between different geographic features. It can also help in decision-making processes related to location wise issues and emergency response.
+
+1) *Sex*
+
+Gender-based drug abuse has always been a topic of discussion in drug analysis. To find insights into our data set and its county-based distribution, we created choropleth plots. The plot below shows the number of accidental deaths due to drug abuse in Connecticut's various counties.
+
+```{r}
+df_demo <- acc_drug
+
+#adding a new column age group
+df_demo$age_grp<-df_demo$Age
+df_demo$age_grp <- ifelse((df_demo$Age>=14 & df_demo$Age<=19) , 'teens',df_demo$age_grp)
+df_demo$age_grp <- ifelse((df_demo$Age>=20 & df_demo$Age<=40) , 'young',df_demo$age_grp)
+df_demo$age_grp <- ifelse((df_demo$Age>=41 & df_demo$Age<=60) , 'mid',df_demo$age_grp)
+df_demo$age_grp <- ifelse((df_demo$Age>=61) , 'old',df_demo$age_grp)
+
+df_demo$statename <- abbr2state(df_demo$Residence.State)
+df_demo$DeathCity <- tolower(df_demo$DeathCity)
+df_demo <- df_demo %>% filter(!is.na(df_demo$Death.County ))
+#unique(df_demo$DeathCity)
+k <- df_demo %>%
+  count(df_demo$Death.County,df_demo$Sex)
+
+names(k)[names(k) == "df_demo$Death.County"] <- "subregion"
+names(k)[names(k) == "df_demo$Sex"] <- "gender"
+k <- k %>% filter(gender != "Unknown")
+k <- k %>% filter(!is.na(subregion ))
+county_us <- map_data("county")
+county_us <- county_us[county_us$region == "connecticut", ]
+k$subregion <- tolower(k$subregion)
+deathdf <- left_join(county_us, k)
+#deathdf
+q <- ggplot(data = deathdf, aes(x = long, y = lat, group = group, fill = n)) 
+
+q + geom_polygon(color = "gray90", size = 0.1) +
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45) +
+  labs(title = "Accidental drug related deaths based on gender", fill="Deaths", x="Longitude", y="Latitude") +
+  scale_fill_gradient2()+
+  facet_wrap(vars(gender))
+```
+
+From the plot, we can infer that:
+
+The number of males who died due to drug abuse is generally higher than females for the years 2012 to 2022. This is evident as the choropleth plot for males has darker shades of purple than that for females.
+The county of Hartford has the highest number of deaths due to drug abuse compared to other counties for both males and females.
+The number of deaths in the counties of Middlesex and Tolland are relatively low compared to other counties for males and females.
+
+
+2) *Age*
+
+The impact of drugs on different age groups has been an area of research for several years. Our primary objective was to gain county-level insights on the age distribution of individuals who died due to drug abuse, which led us to create a choropleth plot faceted on age.
+
+```{r}
+df_age <- df_demo%>%
+  count(df_demo$Death.County,df_demo$age_grp)
+#%>%
+names(df_age)[names(df_age) == "df_demo$Death.County"] <- "subregion"
+names(df_age)[names(df_age) == "df_demo$age_grp"] <- "age"
+
+#k <- k %>% filter(gender != "Unknown")
+df_age <- df_age %>% filter(!is.na(subregion ))
+
+county_us <- map_data("county")
+county_us <- county_us[county_us$region == "connecticut", ]
+df_age$subregion <- tolower(df_age$subregion)
+deathdf_age <- left_join(county_us, df_age)
+#deathdf_age
+
+q <- ggplot(data = deathdf_age %>% filter(age != 'teens'),
+            aes(x = long, y = lat,
+                group = group, fill = n))
+
+q + geom_polygon(color = "gray90", size = 0.1) +
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45) +
+  labs(title = "Accidental drug related deaths for different age groups", fill="Deaths") +
+  scale_fill_gradient2() +
+  facet_wrap(~ age)
+```
+
+The choropleth plot shows the number of deaths due to drug abuse across the different age groups in the counties of Connecticut. The age groups are categorized as young (age 19 - 40), mid (age 40 - 60), and old (age > 60).
+
+There are very few cases of elderly individuals dying from drug abuse in the state.
+The highest number of deaths due to drug abuse was reported for individuals between the age of 20 to 60.
+Additionally, the county of Hartford had the highest number of deaths due to drugs for the mid and young age groups from 2012 to 2022.
+
+3) *Race*
+
+We conducted an analysis to determine the race distribution of individuals who died due to drug abuse. For this purpose, we created a choropleth plot to visualize the count of deaths for each ethnicity across different counties in Connecticut.
+
+
+```{r}
+df_race <- df_demo %>%
+  count(df_demo$Death.County,df_demo$Race)
+names(df_race)[names(df_race) == "df_demo$Death.County"] <- "subregion"
+names(df_race)[names(df_race) == "df_demo$Race"] <- "race"
+df_race <- df_race %>% filter(!is.na(race))
+df_race <- df_race %>% filter(!is.na(subregion ))
+county_us <- map_data("county")
+
+#glimpse(county_us$region)
+county_us <- county_us[county_us$region == "connecticut", ]
+df_race$subregion <- tolower(df_race$subregion)
+deathdf_race <- left_join(county_us, df_race)
+
+deathdf_race <- deathdf_race %>%
+  filter(race != 'Unknown', race != 'Other Asian', race != 'American Indian or Alaska Native') %>%
+  mutate(race = ifelse(race == "Black or African American", "African American", race))
+
+  q <- ggplot(data = deathdf_race,
+              aes(x = long, y = lat,
+                  group = group, fill = n))
+  
+  q + geom_polygon(color = "gray90", size = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) +
+    labs(title = "Accidental drug related deaths faceted on race", fill="Deaths") +
+    scale_fill_gradient2()+
+    facet_wrap(vars(deathdf_race$race))
+```
+
+The majority of individuals who died due to drug abuse were of "white" ethnicity.
+Except for New Haven county, no Chinese individuals were reported to have died due to drug abuse in other counties.
+Asian Indian individuals who died due to drug abuse were relatively low in Hartford, New Haven, and Fairfield counties.
+A significant number of black and Hispanic white individuals were reported to have died due to drug abuse in Hartford, New Haven, and Fairfield counties.
+
+4) *Understanding the Drug Epidemic in Hartford*
+
+In our previous analysis, we discovered that Hartford had the highest count of deaths resulting from drug abuse
+compared to other counties in Connecticut. Hence, we decided to conduct a detailed study on the cities within
+Hartford county. The following Cleveland plot indicates the count of deaths in different cities, where the
+location of the demise and the victim's residential city are represented.
+
+
+```{r}
+# select only the necessary columns from df_demo
+hartford_df <- df_demo[df_demo$Death.County == "HARTFORD", c("Residence.City", "Death.City")]
+
+# remove rows with missing values
+hartford_df <- hartford_df %>% filter(!is.na(hartford_df$Residence.City))
+
+# count the number of deaths per city in ResidenceCity and DeathCity columns
+x <- hartford_df %>%
+  count(Residence.City) %>%
+  rename(city = Residence.City, number_of_deaths_when_city_is_Residencecity = n)
+
+y <- hartford_df %>%
+  count(Death.City) %>%
+  rename(city = Death.City, number_of_deaths_when_city_is_DeathCity = n)
+
+# merge the two data frames by city
+x <- merge(x, y, by = "city")
+x <- x %>% filter(!is.na(city))
+
+# reshape the data frame for visualization
+h <- x %>% gather(citytype, value, number_of_deaths_when_city_is_Residencecity:number_of_deaths_when_city_is_DeathCity)
+
+# create the plot
+ggplot(h, aes(y = city, x = value)) +
+  geom_line(aes(group = city)) +
+  geom_point(aes(color = factor(citytype))) +
+  labs(x = "Number of Deaths", y = "Cities", color = "City type") +
+  ggtitle("Number of deaths with cities as death and residence cities")
+```
+
+We observed the following trends from our analysis:
+
+- Among all the cities in Hartford county, Hartford city had the highest count of deaths from drug abuse, both
+  when it was the location of the demise and when it was the victim's residential city.
+- The count of deaths in Hartford city was significantly higher when it was the location of the demise as opposed
+  to the victim's residential city.
+- Similarly, the cities of New Britain and Bristol were ranked second and third, respectively, in terms of the
+  highest count of deaths resulting from drug abuse in Hartford county.
+- Interestingly, for the cities of East Hartford, West Hartford, Newington and Plainville the count of deaths that occurred
+  within these cities was lower than the count of deaths of residents from these cities who passed away elsewhere.
+
+
+**temporal Aspects of Drug Abuse**
+
+We conducted an analysis to examine the relationship between drug abuse and time variables.
+
+*Seasonality*
+
+We examined the occurrences of drug abuse over time and analyzed the number of reported deaths each year between 2012 and 2022.
+
+
+```{r}
+temporary<-main_df
+temporary$Date<-as.Date(temporary$Date, format = "%m/%d/%Y")
+
+temp_yr<-temporary %>%
+  group_by(yr=as.numeric(format(temporary$Date,"%Y"))) %>%
+  summarise(cnt=n())
+
+temp_yr %>%
+  filter(!is.na(yr)) %>%
+  ggplot() +
+  geom_line(aes(x = yr, y = cnt)) +
+  geom_point(aes(x = yr, y = cnt)) +
+  xlab("Year") +
+  ylab("Number of deaths") +
+  ggtitle("Number of deaths per year") +
+  scale_x_continuous(labels = as.character(temp_yr$yr + 2000), breaks = temp_yr$yr)
+```
+
+Our findings revealed that the highest number of deaths was reported in 2017, followed by 2018, with a consistent increase in deaths from 2018 on wards.
+
+After plotting the average number of deaths per month for the past ten years, we noticed a pattern where the number of deaths tends to increase from April to July, and then again from October to November, on an average.
+
+
+
+```{r}
+temp_month <- temporary %>%
+  group_by(month=as.numeric(format(temporary$Date,"%m"))) %>%
+  summarise(Freq = n()/6)
+temp_month%>%ggplot(aes(x=month,y=Freq))+geom_point()+geom_line()+xlab("month")+ylab("Number of deaths")+
+  ggtitle("Number of deaths per month - averaged across 6 yrs")+
+  scale_x_continuous(labels = as.character(temp_month$month), breaks = temp_month$month)
+```
+
+```{r}
+#Deaths per month for each year
+temporary$month <- factor(format(temporary$Date,"%m"))
+temporary$year <- factor(format(temporary$Date,"%Y"))
+a<-temporary%>%
+  group_by(month,year)%>%
+  summarise(freq=n())
+a<-gather(a, key, value, -month, -year)
+
+a %>%
+  filter(!is.na(month)) %>%
+  ggplot(aes(x = month, y = value, color = year, group = year)) +
+  geom_point() +
+  geom_line() +
+  xlab("Months") +
+  ylab("Number of deaths per month, year") +
+  ggtitle("Number of deaths per month, year for each year") +
+  scale_x_discrete(labels = as.character(a$month), breaks = a$month) +
+  scale_color_discrete(labels = c("2012", "2013", "2014", "2015", "2016","2017","2018","2019","2020","2021"))
+```
+
+In 2017, we noticed a significant increase in the number of deaths from September to the end of the year, and this trend continued into the first three months of 2018. This suggests that the rise in deaths during Fall 2017 and Winter 2018 may have been due to cold weather conditions that may have prompted people to consume more drugs, leading to more deaths. Similar patterns were also observed in 2013 and 2014, although we cannot confirm our assumptions as we lack the necessary data variables in this data set. Furthermore, we observed that the highest number of deaths in 2021 occurred in August, while the deaths getting better by the end of the year in comparison with 2020.
+
+
+We continued analysing the data with patterns. Hence, we went ahead by working on different seasons.
+
+
+
+```{r}
+x<- temporary %>%
+  select(month) %>%
+  na.omit() 
+
+x$month<-as.numeric(x$month)
+x$season<-x$month
+x$season <- ifelse((x$month>=3 & x$month<=5) , 'A: spring',x$season)
+x$season <- ifelse((x$month>=6 & x$month<=8) , 'B: summer',x$season)
+x$season <- ifelse((x$month>=9 & x$month<=11) , 'C:Fall',x$season)
+x$season <- ifelse((x$month==12 | x$month==1 | x$month==2) , 'D:Winter',x$season)
+
+a<-x%>%group_by(season)%>%summarise(freq=n())
+a%>%ggplot(aes(x=season,y=freq,group=1))+
+  geom_histogram(stat = "identity",fill="cadetblue")+
+  xlab('Seasons in USA')+
+  ylab('Count of Deaths')+
+  ggtitle("Count of Deaths due to drug abuse across seasons")
+```
+
+It is evident from the plot that the highest number of deaths occured were during Summer.
+
+
+
+**Patterns in Drug consumption over Years**
+
+To gain further insight into the factors contributing to the increase in drug-related deaths year after year, we analyzed the chemical compounds/drugs that were responsible for these deaths during the years under consideration.
+
+```{r}
+#only plotting top 5 chemicals
+chem_df<-main_df
+cols_chemical <- c("Heroin","Cocaine","Fentanyl" ,"Fentanyl.Analogue", "Oxycodone" ,"Oxymorphone" ,"Ethanol","Hydrocodone","Benzodiazepine","Methadone","Meth.Amphetamine","Amphet","Tramad","Morphine..Not.Heroin.","Hydromorphone","Xylazine","Gabapentin","Opiate.NOS","Heroin.Morph.Codeine","Other.Opioid")
+
+
+rootcause_df <- subset(chem_df, select=c('Date','Description.of.Injury', cols_chemical))
+all_chemicals <- c()
+all_chemicals <- c(all_chemicals, cols_chemical)
+
+for (row in 1:nrow(rootcause_df)) {
+  chemical_list <-  ''
+  chemical_count <- 0
+  for (chemical in cols_chemical){
+    val = rootcause_df[row, chemical]
+    if (!is.na(val)){
+      chemical_list <- paste(chemical_list, chemical, sep=',')
+      chemical_count <- chemical_count+1
+      all_chemicals <- c(all_chemicals, chemical)
+    }
+  }
+}
+chem_df<- as.data.frame(table(all_chemicals))
+chem_df<-chem_df[with(chem_df, order(-chem_df$Freq)), ]
+head(chem_df,5)
+```
+
+
+```{r}
+# summarize data by chemical and year
+he_df <- temporary %>% 
+  group_by(yr = fct_explicit_na(format(as.Date(Date), "%Y")), Heroin) %>% 
+  summarise(cnt = n()) %>% 
+  filter(Heroin == 'Y')
+he_df$Heroin <- "heroin"
+he_df <- he_df %>% rename(chemical = Heroin)
+
+co_df <- temporary %>% 
+  group_by(yr = fct_explicit_na(format(as.Date(Date), "%Y")), Cocaine) %>% 
+  summarise(cnt = n()) %>% 
+  filter(Cocaine == 'Y')
+co_df <- co_df[1:5,]
+co_df$Cocaine <- "Cocaine"
+co_df <- co_df %>% rename(chemical = Cocaine)
+
+fe_df <- temporary %>% 
+  group_by(yr = fct_explicit_na(format(as.Date(Date), "%Y")), Fentanyl) %>% 
+  summarise(cnt = n()) %>% 
+  filter(Fentanyl == 'Y')
+fe_df$Fentanyl <- "Fentanyl"
+fe_df <- fe_df %>% rename(chemical = Fentanyl)
+
+be_df <- temporary %>% 
+  group_by(yr = fct_explicit_na(format(as.Date(Date), "%Y")), Benzodiazepine) %>% 
+  summarise(cnt = n()) %>% 
+  filter(Benzodiazepine == 'Y')
+be_df$Benzodiazepine <- "Benzodiazepine"
+be_df <- be_df %>% rename(chemical = Benzodiazepine)
+
+eth_df <- temporary %>% 
+  group_by(yr = fct_explicit_na(format(as.Date(Date), "%Y")), Ethanol) %>% 
+  summarise(cnt = n()) %>% 
+  filter(Ethanol == 'Y')
+eth_df$Ethanol <- "Ethanol"
+eth_df <- eth_df %>% rename(chemical = Ethanol)
+
+# combine data for all chemicals
+dfall <- dplyr::bind_rows(he_df, fe_df, co_df, be_df, eth_df)
+dfall$yr <- as.character(dfall$yr)
+dfall$yr <- ifelse(grepl("[^0-9]", dfall$yr), NA, dfall$yr)
+dfall$yr <- as.numeric(dfall$yr)
+dfall <- dfall[complete.cases(dfall), ]
+dfall$yr <- as.character(dfall$yr + 2000)
+dfall$yr <- as.Date(paste0(dfall$yr, "-01-01"))
+
+#plot
+dfall %>%
+  ggplot(aes(x = yr, y = cnt, color = chemical, group = chemical)) +
+  geom_line() +
+  geom_point() +
+  xlab("Year") +
+  ylab("Frequency of deaths due to chemicals consumed") +
+  ggtitle("Year wise analysis of Top 5 most consumed chemicals") +
+  scale_x_date(date_labels = "%Y")
+```
+
+Our findings indicate that:
+
+'Fentanyl', which was the least consumed drug between 2012-2014, has been on the rise since 2015 and has surpassed 'Heroin' consumption in 2016. Conversely, 'Heroin' consumption has been decreasing since 2016 and it appears that 'Fentanyl' is cannibalizing it.
+In addition, the consumption of other drugs has also been increasing steadily over the years in contrast to 'Heroin'.
+
+
+**Drug Abuse Causal Diagnosis**
+
+Our aim was to investigate the factors responsible for drug abuse cases and identify their underlying root causes.
+We conducted an analysis to determine the major chemicals consumed and the types of injuries associated with drug abuse.
+Through this investigation, we were able to identify the most commonly used chemicals in drug abuse cases,
+as well as the various forms of drug abuse, including ingested pills, alcohol, and substance abuse.
+Furthermore, we categorized the factors that contributed to the majority of drug abuse cases.
+
+**Derived Metric Calculation**
+
+In the medical diagnosis of drug abuse cases, there are 14 types of chemicals commonly found. These include Heroin, Cocaine, Fentanyl, Fentanyl Analogue, Oxycodone, Oxymorphone, Ethanol, Hydrocodone, Benzodiazepine, Methadone, Amphet, Tramad, Morphine_NotHeroin, and Hydromorphone. We have computed two derived metrics: "Chemicals_Diagnosed" and "count_of_diagnosed_chemicals". The former represents the list of chemicals found in each case of drug abuse, i.e., in each row of the dataframe, while the latter denotes the number of chemicals found in each drug abuse case out of the total list of 14 chemicals mentioned above. We will further explore these metrics in the upcoming sections.
+
+
+
+```{r}
+# Adding diagnosed chemical list for each drug abuse case
+cols_chemical <- c("Heroin","Cocaine","Fentanyl" ,"Fentanyl.Analogue", "Oxycodone" ,"Oxymorphone" ,"Ethanol","Hydrocodone","Benzodiazepine","Methadone","Meth.Amphetamine","Amphet","Tramad","Morphine..Not.Heroin.","Hydromorphone","Xylazine","Gabapentin","Opiate.NOS","Heroin.Morph.Codeine","Other.Opioid")
+
+# Subset relevant columns for root cause analysis
+rootcause_df <- subset(main_df, select=c('Date','Description.of.Injury', cols_chemical))
+
+Chemicals_Diagnosed <- rep(NA, nrow(rootcause_df))
+count_diagnosed_chemicals <- rep(NA, nrow(rootcause_df))
+all_chemicals <- c()
+
+for (row in 1:nrow(rootcause_df)) {
+  chemical_list <-  ''
+  chemical_count <- 0
+  for (chemical in cols_chemical){
+    val = rootcause_df[row, chemical]
+    if (!is.na(val) && val != 0){
+      chemical_list <- paste(chemical_list, chemical, sep=',')
+      chemical_count <- chemical_count+1
+      all_chemicals <- c(all_chemicals, chemical)
+    }
+  }
+  if (chemical_count > 0) {
+    Chemicals_Diagnosed[row] <- substr(chemical_list, 2, nchar(chemical_list))
+    count_diagnosed_chemicals[row] <- chemical_count
+  }
+}
+rootcause_df$Chemicals_Diagnosed <- Chemicals_Diagnosed
+rootcause_df$count_of_diagnosed_chemicals <- count_diagnosed_chemicals
+
+df_rca_unique <- unique(rootcause_df[, c('Chemicals_Diagnosed', 'count_of_diagnosed_chemicals')])
+
+tail(df_rca_unique)
+```
+
+
+
+We analyzed the derived metric "count_of_diagnosed_chemicals" and created a histogram to represent the distribution of the number of chemicals found in drug abuse cases. The histogram showed that in most cases, there were only two chemicals found, and this was the case for more than 37% of the cases.
+
+
+
+```{r}
+# histogram of number of chemicals in different drug abuse cases
+total = nrow(rootcause_df)
+temp_df <- rootcause_df %>% group_by(count_of_diagnosed_chemicals) %>% summarise(Count = n()*100/total)
+ggplot(temp_df, aes(x = reorder(count_of_diagnosed_chemicals, -Count), y=Count)) +
+  geom_histogram(stat="identity", fill = "burlywood4") +
+  ggtitle("Number of Chemicals",
+          subtitle = "Number of chemicals found in the medical investigation of drug abuse cases") +
+  labs(x = "Number of chemicals diagnosed", y = "% of drug abuse cases") +
+  theme(plot.title = element_text(face = "bold"))  +
+  theme(plot.caption = element_text(color = "grey68"))+
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+
+
+```{r}
+# Contribution of chemicals in different cases
+temp_df <- data.frame('Drug_Composition'=all_chemicals)
+total = nrow(temp_df)
+temp_df <- temp_df %>% group_by(Drug_Composition) %>% summarise(Count = n()*100/total)
+
+ggplot(temp_df, aes(x = reorder(Drug_Composition, Count), y=Count)) +
+  geom_histogram(stat="identity", fill = "cadetblue4") +
+  coord_flip() +
+  ggtitle("Distribution of 14 chemicals",
+          subtitle = "Percentage of drug abuse cases impacted of 14 chemicals") +
+  labs(x = "Chemical diagnosed", y = "% of Drug Abuse Cases") +
+  theme(plot.title = element_text(face = "bold"))  +
+  theme(plot.caption = element_text(color = "grey68"))+
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+In our analysis of drug abuse cases, we examined the chemicals identified in medical investigations. We created a plot showing the percentage of drug abuse cases in which each chemical was diagnosed. The results indicated that 'Heroin', 'Fentanyl', and 'Cocaine' were the three most common chemicals found, occurring over 50% of the cases. The remaining chemicals were less frequently identified.
+
+
+
+**Association Mining among 14 chemicals**
+
+```{r}
+# Contribution of chemicals in different cases
+temp_df <- rootcause_df[rootcause_df$Chemicals_Diagnosed>1,]
+temp_df <- data.frame(temp_df  %>%
+                        group_by(Chemicals_Diagnosed) %>% 
+                        summarise(Freq=n()) %>% 
+                        mutate(Perc_Cases=100*(Freq/nrow(rootcause_df))))
+temp_df <- temp_df[temp_df$Freq>1,]
+
+#temp_df <- temp_df[,temp_df[order('Perc_Cases', 'Freq','Chemicals_Diagnosed')]]
+temp_df <- temp_df[order(temp_df[,'Perc_Cases'] ),]
+
+# Top 20 combinations occured together
+temp_df <- tail(temp_df, 20)
+
+
+ggplot(temp_df, aes(x = reorder(Chemicals_Diagnosed, -Freq), y=Perc_Cases)) +
+  geom_point(color='navyblue', size=3) +
+  ggtitle("Drugs Association",
+          subtitle = "% drug abuse cases with given combination of chemicals") +
+  coord_flip() +
+  labs(x = "Associated Chemicals", y = "% of Total Drug Abuse Cases Affected") +
+  theme(plot.title = element_text(face = "bold"))  +
+  theme(plot.caption = element_text(color = "grey68"))+
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+To investigate the co-occurrence of the 14 chemicals found in drug abuse cases, we analyzed the most frequently occurring combinations. We found that 'Heroin' was present in all the popular combinations. The top three most frequently occurring chemical combinations were 'Heroin' with 'Fentanyl' (5%), 'Heroin' with 'Cocaine' (4.7%), and 'Heroin' with 'Ethanol' (3.3%). This suggests that 'Heroin' is the most commonly consumed chemical among the drug abusers. Also, Fentanyl was observed to be the highest intake with over 8.2%.
+
+
+**Analysis of Injury Description - Text Mining using NLP**
+
+In this section, we examined the injury description for all drug abuse cases in order to categorize the mode of drug consumption. The "DescriptionofInjury" field contained free-form text, so we performed basic natural language processing on it.
+
+We took the following steps:
+
+  1. Tokenization: We first split the description of each drug abuse case into tokens.
+  2. Stop word removal: We filtered out the stop words and extracted candidate tokens that had noun and verb POS tags, as these represented the modes and forms in which drugs were consumed. We then calculated the frequency of these drug consumption modes.
+     
+
+
+```{r}
+list_stopword = c('use','and', 'used', 'took', 'multiple', 'of', 'with', 'combined', 'misuse','including', 'consumed','in', 'abused', 'abuse','another', 'while','unknown', 'to','effects','usage','own', 'others','drank', 'substance', 'drug')
+
+
+
+remove_stopwords <- function(df){
+  df_filter <-  df[!(df$Injury %in% list_stopword),]
+  return (df_filter)
+}
+all_injury <- c()
+
+for (row in 1:nrow(rootcause_df)) {
+  val = as.character(rootcause_df[row, "Description.of.Injury"])
+  split_val <- unlist(strsplit(val, ' '))
+  all_injury <- c(all_injury, split_val)
+}
+all_injury <- tolower(all_injury)
+temp_df <- data.frame('Injury'=all_injury)
+temp_df <- temp_df %>% group_by(Injury) %>% summarise(Freq = n())
+
+temp_df <- na.omit(temp_df)
+temp_df <- as.data.frame(temp_df)
+
+# stop word removal
+temp_df <- remove_stopwords(temp_df)
+total = sum(temp_df$Freq)
+temp_df$Freq <- (temp_df$Freq)*100/total
+df_word_cloud = temp_df
+
+#temp_df <- temp_df[temp_df$Freq>1,]
+temp_df <- temp_df[order(temp_df[,'Freq'] ),]
+
+# plotting the top 20 major modes discovered
+temp_df <- tail(temp_df, 20)
+ggplot(temp_df, aes(x = reorder(Injury, Freq), y=Freq)) +
+  geom_histogram(stat="identity", fill = "coral3") +
+  coord_flip() +
+  ggtitle("Drug Composition", subtitle = "Exploring the Drug Abuse cases by the mode of drug consumption") +
+  labs(x = "Modes/Forms in which drug was consumed", y = "Number of Drug Abuse Cases") +
+  theme(plot.title = element_text(face = "bold"))  +
+  theme(plot.caption = element_text(color = "grey68"))+
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+Our analysis revealed that ingestion, injection, and medication were the most frequent modes of drug consumption. Ingestion was the mode in 23% of drug abuse cases, followed by injection in 11% and medication in 7.7% of cases. Together, these three modes  accounted for 42% of all drug abuse cases.
+
+```{r}
+# WordCloud of Injury Description
+set.seed(1234)
+wordcloud(words = df_word_cloud$Injury, freq = temp_df$Freq, min.freq = 0.5,
+          max.words=500, random.order=FALSE, rot.per=0.55, 
+          colors=brewer.pal(8, "Dark2"))
+
+glimpse(temp_df)
+```
+
+**Conclusions and Summary**
+
+Our study focused on drug overdose deaths in Connecticut between 2012 and 2021. We took a three-pronged approach to uncover patterns and insights into drug abuse cases and to answer our initial questions.
+
+Firstly, we investigated whether demographic factors such as age, gender, race, and location were linked to drug abuse cases. Our analysis and supporting graphs showed a strong correlation between these factors and drug abuse.
+
+Secondly, we examined the overall trend in drug abuse cases from 2012 to 2021. Our findings revealed an increasing number of deaths due to drug abuse over time.
+
+Lastly, we conducted a causal diagnosis to identify the chemicals and co-consumption responsible for drug overdose deaths in Connecticut. Our results provided valuable information about the types of drugs and injuries involved in these cases.
+
+Our analysis and conclusions were consistent with similar reports found in online news articles [4]. The study highlighted the severity of the drug abuse problem in Connecticut and around the world and underscored the urgent need for action to save innocent lives.
+
+
+**References:**
+
+[1] https://www.whitehouse.gov/wp-content/uploads/2022/03/FY-2023-Budget-Highlights.pdf
+
+[2] https://www.commonwealthfund.org/blog/2023/overdose-deaths-declined-remained-near-record-levels-during-first-nine-months-2022-states#:~:text=An%20estimated%2079%2C117%20Americans%20died,higher%20than%20pre%2D2020%20levels.
+
+[3] https://portal.ct.gov/DPH/Health-Education-Management--Surveillance/The-Office-of-Injury-Prevention/Opioids-and-Prescription-Drug-Overdose-Prevention-Program
+
+[4] https://www.sciencedaily.com/releases/2023/03/230330102329.htm
+
+[5] https://r4ds.had.co.nz/
+
+[6] https://r-graph-gallery.com/
+
+[7] https://www.statmethods.net/advgraphs/index.html
